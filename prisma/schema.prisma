@@ -1,0 +1,273 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OPERADOR
+}
+
+enum StatusUsuario {
+  ATIVO
+  INATIVO
+}
+
+enum Cultura {
+  SOJA
+  CANA
+  MILHO
+  OUTRA
+}
+
+enum TipoSolo {
+  ARENOSO
+  ARGILOSO
+  MISTO
+  OUTRO
+}
+
+enum StatusTalhao {
+  NORMAL
+  SECO
+  IRRIGANDO
+  INATIVO
+}
+
+enum TipoIrrigacao {
+  GOTEJAMENTO
+  ASPERSAO
+  MICROASPERSAO
+}
+
+enum StatusIrrigacao {
+  ATIVO
+  PROXIMO
+  PENDENTE
+  CONCLUIDO
+  AGENDADO
+  INATIVO
+  PAUSADO
+}
+
+enum CategoriaInsumo {
+  FERTILIZANTE
+  DEFENSIVO
+  SEMENTE
+  CORRETIVO
+  ADJUVANTE
+  OUTRO
+}
+
+enum UnidadeMedida {
+  KG
+  L
+  SC
+  UN
+  T
+}
+
+enum StatusEstoque {
+  OK
+  BAIXO
+}
+
+enum TipoMovimentacao {
+  ENTRADA
+  SAIDA
+  AJUSTE
+}
+
+enum TipoAlerta {
+  ESTOQUE
+  IRRIGACAO
+  TALHAO
+  SISTEMA
+}
+
+enum SeveridadeAlerta {
+  CRITICO
+  ALERTA
+  INFO
+  OK
+}
+
+enum StatusAlerta {
+  ABERTO
+  EM_ANALISE
+  SOLUCIONADO
+}
+
+enum StatusSolicitacao {
+  PENDENTE
+  APROVADA
+  RECUSADA
+}
+
+model Usuario {
+  id             String        @id @default(uuid())
+  nome           String
+  email          String        @unique
+  senha          String
+  matricula      String?       @unique
+  dataNascimento DateTime?
+  setor          String?
+  cargo          String?
+  role           Role          @default(OPERADOR)
+  status         StatusUsuario @default(ATIVO)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  solicitacoesCriadas      SolicitacaoDesativacao[] @relation("SolicitadoPor")
+  solicitacoesRespondidas  SolicitacaoDesativacao[] @relation("RespondidoPor")
+  movimentacoesEstoque     MovimentacaoEstoque[]
+  historicos               Historico[]
+}
+
+model Talhao {
+  id            String       @id @default(uuid())
+  nome          String       @unique
+  cultura       Cultura
+  areaHectares  Float
+  tipoSolo      TipoSolo?
+  status        StatusTalhao @default(NORMAL)
+  umidadeSolo   Int?
+  temperatura   Float?
+  latitude      Float?
+  longitude     Float?
+  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  irrigacoes              Irrigacao[]
+  alertas                 Alerta[]
+  solicitacoesDesativacao SolicitacaoDesativacao[]
+  leituras     LeituraTalhao[]
+  consumosAgua ConsumoAgua[]
+}
+
+model Irrigacao {
+  id              String           @id @default(uuid())
+  talhaoId        String
+  tipoIrrigacao   TipoIrrigacao
+  horaInicio      String
+  duracaoMinutos  Int
+  diasSemana      String[]
+  status          StatusIrrigacao  @default(AGENDADO)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  talhao Talhao @relation(fields: [talhaoId], references: [id])
+  consumosAgua ConsumoAgua[]
+}
+
+model Estoque {
+  id                 String          @id @default(uuid())
+  nomeProduto        String
+  categoria          CategoriaInsumo
+  unidade            UnidadeMedida
+  quantidadeEstoque  Float
+  estoqueMinimo      Float
+  status             StatusEstoque   @default(OK)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movimentacoes MovimentacaoEstoque[]
+  alertas       Alerta[]
+}
+
+model MovimentacaoEstoque {
+  id         String           @id @default(uuid())
+  estoqueId  String
+  usuarioId  String
+  tipo       TipoMovimentacao
+  quantidade Float
+  observacao String?
+
+  createdAt DateTime @default(now())
+
+  estoque Estoque @relation(fields: [estoqueId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+}
+
+model Alerta {
+  id          String           @id @default(uuid())
+  descricao   String
+  tipo        TipoAlerta
+  severidade  SeveridadeAlerta
+  status      StatusAlerta     @default(ABERTO)
+
+  talhaoId  String?
+  estoqueId String?
+
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  talhao  Talhao?  @relation(fields: [talhaoId], references: [id])
+  estoque Estoque? @relation(fields: [estoqueId], references: [id])
+}
+
+model SolicitacaoDesativacao {
+  id                  String            @id @default(uuid())
+  talhaoId            String
+  solicitadoPorId     String
+  respondidoPorId     String?
+  justificativa       String
+  status              StatusSolicitacao @default(PENDENTE)
+  observacaoResposta  String?
+
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  talhao        Talhao   @relation(fields: [talhaoId], references: [id])
+  solicitadoPor Usuario  @relation("SolicitadoPor", fields: [solicitadoPorId], references: [id])
+  respondidoPor Usuario? @relation("RespondidoPor", fields: [respondidoPorId], references: [id])
+}
+
+model Historico {
+  id              String   @id @default(uuid())
+  usuarioId       String?
+  acao            String
+  entidade        String
+  entidadeId      String?
+  descricao       String
+  dadosAnteriores Json?
+  dadosNovos      Json?
+
+  createdAt DateTime @default(now())
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+}
+
+model LeituraTalhao {
+  id           String       @id @default(uuid())
+  talhaoId     String
+  umidadeSolo  Int
+  temperatura  Float
+  statusTalhao StatusTalhao
+
+  createdAt DateTime @default(now())
+
+  talhao Talhao @relation(fields: [talhaoId], references: [id], onDelete: Cascade)
+}
+
+model ConsumoAgua {
+  id            String          @id @default(uuid())
+  talhaoId      String
+  irrigacaoId   String?
+  tipoIrrigacao TipoIrrigacao?
+  litros        Float
+
+  createdAt DateTime @default(now())
+
+  talhao    Talhao     @relation(fields: [talhaoId], references: [id], onDelete: Cascade)
+  irrigacao Irrigacao? @relation(fields: [irrigacaoId], references: [id], onDelete: SetNull)
+}
